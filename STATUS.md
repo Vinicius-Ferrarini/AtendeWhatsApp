@@ -51,7 +51,9 @@ Antes de escrever qualquer código de produção, a Fase 0 precisa responder **6
 
 ## O spike de validação
 
-Fica **fora deste repositório**, em `C:\github\atende-spike`, como manda a Fase 0 do `tasks.md`: é código descartável e nenhuma linha dele vai para produção.
+Vive na branch órfã [`spike`](../../tree/spike), sem relação alguma com a `main`. O `tasks.md` manda manter o código da Fase 0 fora do projeto principal; a branch órfã cumpre isso e ainda preserva o trabalho. **Nenhuma linha dele vai para produção.**
+
+O APK compilado está versionado lá como `atende-spike.apk`, para baixar direto no celular.
 
 O app se auto-avalia e grava o veredito de cada pergunta no próprio aparelho, então **não precisa de cabo USB** para colher os resultados.
 
@@ -76,7 +78,7 @@ O botão **EXPORTAR E ENVIAR** grava em `Downloads` e abre a folha de compartilh
 
 ## Próximo passo
 
-1. Instalar `atende-spike.apk` no Redmi (mandar por WhatsApp/e-mail/Drive, abrir, permitir fontes desconhecidas).
+1. Instalar `atende-spike.apk` no Redmi — baixar da branch [`spike`](../../tree/spike) pelo próprio celular, ou mandar por WhatsApp/e-mail/Drive; abrir e permitir fontes desconhecidas.
 2. Conceder acesso a notificações e ativar a acessibilidade, pelos botões da própria tela.
 3. Rodar as 6 rodadas do roteiro — precisa de **um segundo celular** para ligar pelo WhatsApp.
 4. Exportar os resultados e registrar as respostas na seção 7 do `plan.md` (T009).

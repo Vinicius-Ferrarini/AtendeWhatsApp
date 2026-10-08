@@ -135,6 +135,8 @@ O pacote Kotlin é `br.atendepai`.
 | Regras que nada pode violar | [`.specify/memory/constitution.md`](.specify/memory/constitution.md) |
 | Onde o projeto está agora | [`STATUS.md`](STATUS.md) |
 
+O app descartável que valida o comportamento real do WhatsApp e do HyperOS (Fase 0) vive na branch órfã [`spike`](../../tree/spike), fora da `main` por exigência do `tasks.md`.
+
 ## Comandos
 
 Disponíveis a partir da Fase 1, quando o projeto Gradle existir:
