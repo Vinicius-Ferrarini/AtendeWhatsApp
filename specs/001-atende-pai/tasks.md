@@ -30,7 +30,7 @@ App descartável, fora do repositório principal. Nenhum código daqui vai para 
 - [ ] T011 [P] Configurar ktlint, detekt e `explicitApi()` no `:core`
 - [ ] T012 [P] Configurar JUnit 5 + coroutines-test + Turbine no `:core`; Robolectric no `:app`
 - [ ] T013 Garantir que `./gradlew check` roda verde com projeto vazio
-- [ ] T014 Copiar `constitution.md` e specs para `.specify/` e `specs/001-atende-pai/`
+- [x] T014 Copiar `constitution.md` e specs para `.specify/` e `specs/001-atende-pai/`
 
 ## Fase 2 — Domínio: atendimento automático (1,5 dia) · RF-02
 
