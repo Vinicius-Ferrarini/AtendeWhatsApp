@@ -1,0 +1,36 @@
+# Segredos — nunca versionar (CLAUDE.md, "Assinatura do APK de release")
+keystore.properties
+*.jks
+*.keystore
+
+# Específico da máquina
+local.properties
+
+# Gradle
+.gradle/
+build/
+captures/
+.cxx/
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+output.json
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.kotlin/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Logs e fixtures capturadas antes de anonimizar
+*.log
+fixtures/dumpsys-*.txt
