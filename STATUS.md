@@ -1,13 +1,13 @@
 # Status do projeto
 
-**Atualizado em:** 2026-10-08
+**Atualizado em:** 2026-10-08 (medição parcial do spike)
 
 | | |
 | --- | --- |
 | **Fase atual** | Fase 0 — spike de validação |
 | **Código de produção** | Nenhuma linha ainda (começa na Fase 1) |
-| **Bloqueio** | Aguardando medições no Redmi Note 13 com ligações reais do WhatsApp |
-| **Próximo passo** | Instalar o APK do spike no celular e rodar as 6 rodadas de medição |
+| **Bloqueio** | Faltam medir P-1b, P-5 e P-6; P-5 e P-6 travam a decisão C-5 |
+| **Próximo passo** | Rodar as 3 rodadas restantes e testar as duas tentativas finais de plano A para atender |
 
 ---
 
@@ -15,9 +15,9 @@
 
 A especificação está completa: requisitos, critérios de aceite, arquitetura, catálogo de testes e tarefas por fase. A constituição do projeto está ratificada.
 
-Antes de escrever qualquer código de produção, a Fase 0 precisa responder **6 perguntas** sobre como o WhatsApp e o HyperOS se comportam de verdade (`plan.md`, seção 7). Cada resposta define se o app usa o plano A ou o plano B naquele ponto. Um app de spike descartável foi escrito e compilado para responder a essas perguntas; falta rodá-lo no aparelho.
+Antes de escrever qualquer código de produção, a Fase 0 precisa responder **6 perguntas** sobre como o WhatsApp e o HyperOS se comportam de verdade (`plan.md`, seção 7). Cada resposta define se o app usa o plano A ou o plano B naquele ponto. Um app de spike descartável foi escrito, compilado e executado no aparelho. **Quatro das sete medições já foram feitas**; faltam P-1b, P-5 e P-6.
 
-**Nada foi medido ainda.** A tabela da seção 7 do `plan.md` segue em branco de propósito: só recebe observação real.
+As respostas medidas estão na seção 7.1 do `plan.md`. As três pendentes seguem em branco de propósito: a tabela só recebe observação real.
 
 ## O que já foi feito
 
@@ -32,15 +32,19 @@ Antes de escrever qualquer código de produção, a Fase 0 precisa responder **6
 
 ### Fase 0 — spike de validação
 
-- [x] **T001** — app de spike escrito, compilado e empacotado em APK
-- [ ] **T002** — P-1: chamada chega como `CATEGORY_CALL` com ações, bloqueado e desbloqueado?
-- [ ] **T003** — P-2: disparar o `PendingIntent` de "Atender" funciona no HyperOS?
-- [ ] **T004** — P-3: existe notificação contínua com ação "Desligar"?
-- [ ] **T005** — P-4: viva-voz via `setCommunicationDevice` se mantém?
+Medido no Redmi Note 13 em 2026-10-08, com chamada de voz real. Detalhes na seção 7.1 do [`plan.md`](specs/001-atende-pai/plan.md).
+
+- [x] **T001** — app de spike escrito, compilado, instalado e executado
+- [~] **T002** — P-1 **bloqueado: SIM** (`category=call`, ação `Aceitar` com `PendingIntent`). Falta o cenário desbloqueado
+- [x] **T003** — P-2 **NÃO**: `PendingIntent.send()` não lança exceção e não tem efeito. Atender vai por acessibilidade
+- [x] **T004** — P-3 **SIM**: notificação contínua com ação `Desligar`; encerra de verdade
+- [x] **T005** — P-4 **NÃO**: o áudio volta para o alto-falante de ouvido em até 20 s. Viva-voz vai por acessibilidade
 - [ ] **T006** — P-5: gesto de volume chega à acessibilidade com a tela apagada?
 - [ ] **T007** — P-6: opção nativa do botão liga/desliga encerra chamada do WhatsApp?
 - [ ] **T008** — salvar a notificação real como `fixtures/whatsapp_chamada.json`
-- [ ] **T009** — registrar as respostas na seção 7 do `plan.md` e decidir C-5 na `spec.md`
+- [ ] **T009** — registrar as respostas (parcial, feito) e decidir C-5 na `spec.md` (travado em P-5/P-6)
+
+**O achado central:** o mesmo código encerra a chamada mas não a atende. Atender exige serviço em primeiro plano com microfone, que o Android 14 nega a um disparo programático em segundo plano; desligar não precisa de microfone. Isso promove o `AccessibilityService` de contingência a mecanismo principal de atendimento.
 
 ### Ambiente
 
@@ -72,18 +76,18 @@ O botão **EXPORTAR E ENVIAR** grava em `Downloads` e abre a folha de compartilh
 - `atende-spike-log-<data>.txt` — log completo, com o JSON de cada notificação
 - `whatsapp_chamada-<data>.json` — a fixture de T008
 
-> **Ressalva:** o spike compila e passa no lint, mas **nunca foi executado**. Pode falhar no primeiro toque.
+> **Executado com sucesso em 2026-10-08** no Redmi Note 13: o app subiu, o listener conectou e as sondas registraram veredito.
 
 > **Privacidade:** a fixture contém o nome e possivelmente o número de quem ligou. Trocar por um nome fictício antes de versionar.
 
 ## Próximo passo
 
-1. Instalar `atende-spike.apk` no Redmi — baixar da branch [`spike`](../../tree/spike) pelo próprio celular, ou mandar por WhatsApp/e-mail/Drive; abrir e permitir fontes desconhecidas.
-2. Conceder acesso a notificações e ativar a acessibilidade, pelos botões da própria tela.
-3. Rodar as 6 rodadas do roteiro — precisa de **um segundo celular** para ligar pelo WhatsApp.
-4. Exportar os resultados e registrar as respostas na seção 7 do `plan.md` (T009).
+1. Medir **P-1b** (chamada com o celular desbloqueado, em outro app) — rodada rápida.
+2. Medir **P-5** (volume com a tela apagada) e **P-6** (botão liga/desliga) — destravam C-5.
+3. Enviar o `atende-spike-log-*.txt` e o `whatsapp_chamada-*.json` para fechar **T008**.
+4. Testar as duas tentativas restantes de plano A para atender, antes de aceitar a acessibilidade como definitiva: `setPendingIntentBackgroundActivityStartMode` (API 34) e `TelecomManager.acceptRingingCall()`.
 5. Decidir **C-5** na `spec.md`: qual gesto encerra a ligação.
-6. Dar o **go / no-go** de cada ponto: plano A ou plano B.
+6. Dar o **go / no-go** de cada ponto e fechar a Fase 0.
 
 Só então começa a Fase 1 (fundação do projeto Gradle) e, com ela, o primeiro teste vermelho.
 
@@ -104,10 +108,10 @@ As cinco da seção 6 da `spec.md` têm padrão adotado e todas viram opção co
 | Risco | Prob. | Impacto | Mitigação |
 | --- | --- | --- | --- |
 | Atualização do WhatsApp muda notificação ou rótulos | Média | Alto | Parser por categoria; rótulos configuráveis; teste de contrato |
-| Android bloqueia disparo da ação em segundo plano | Média | Alto | Plano B por acessibilidade |
+| Android bloqueia disparo da ação em segundo plano | **Confirmado** | Alto | **Materializou-se em P-2.** Atender vai por acessibilidade |
 | HyperOS encerra o serviço | Alta | Alto | Inicialização automática, bateria sem restrições, `requestRebind` |
 | Gesto de volume não chega com tela apagada | Média | Médio | Opção nativa do botão liga/desliga |
-| WhatsApp devolve o áudio ao fone de ouvido | Média | Médio | Clique no botão de alto-falante |
+| WhatsApp devolve o áudio ao fone de ouvido | **Confirmado** | Médio | **Materializou-se em P-4**, em até 20 s. Clique no botão de alto-falante |
 | Golpista atendido automaticamente | Média | Médio | Modo "só contatos" como padrão |
 
 ## Anotações para fases futuras

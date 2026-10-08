@@ -169,6 +169,36 @@ Saída obrigatória do spike: respostas registradas aqui e a notificação real 
 
 > **Atenção:** não detectar "tela apagou" para encerrar a ligação. O sensor de proximidade apaga a tela quando o celular encosta no ouvido e derrubaria a chamada.
 
+### 7.1 Respostas medidas
+
+Medido em **2026-10-08**, no Redmi Note 13 (HyperOS), com chamada de voz real do WhatsApp.
+Fase 0 **incompleta**: três perguntas seguem sem medição.
+
+| # | Resposta | Observado | Decisão |
+| --- | --- | --- | --- |
+| P-1a (bloqueado) | **SIM** | `category=call`, ação **`Aceitar`** com `PendingIntent`, título com o nome do contato, **`fullScreenIntent=false`** | Plano A: detectar por notificação |
+| P-1b (desbloqueado) | — | não medido | pendente |
+| P-2 | **NÃO** | `PendingIntent.send()` **não lança exceção e não tem efeito algum**. Falha também no disparo manual, fora do atraso automático | **Plano B: clique via acessibilidade** |
+| P-3 | **SIM** | notificação contínua com ação `Desligar` e `PendingIntent`; **encerrou de verdade** | Plano A: disparar o `PendingIntent` |
+| P-4 | **NÃO** | `setCommunicationDevice(BUILTIN_SPEAKER)` retorna `true`, mas o áudio volta para `BUILTIN_EARPIECE` em até 20 s | **Plano B: clique no botão de alto-falante** |
+| P-5 | — | não medido | pendente |
+| P-6 | — | não medido | pendente |
+
+**A assimetria entre P-2 e P-3 é o achado central.** O mesmo código, na mesma notificação, encerra a chamada mas não a atende. A explicação mais provável: atender exige iniciar um serviço em primeiro plano com acesso ao **microfone**, e o Android 14 bloqueia isso quando a origem é um disparo programático em segundo plano — o `send()` é entregue, mas o WhatsApp não consegue completar a ação. Desligar não precisa de microfone, então passa. Um toque humano carrega a isenção de *background activity launch*; `PendingIntent.send()` não.
+
+Consequências para a arquitetura:
+
+- **Atender deixa de ser plano A.** O `AccessibilityService` passa de contingência a mecanismo principal de atendimento, porque o clique sintético conta como interação do usuário. Afeta o componente `AcoesChamadaNotificacao` (seção 4.3) e a tarefa T024.
+- **Desligar continua plano A**, por `PendingIntent` — é o caminho mais simples e já comprovado.
+- **Viva-voz também vai por acessibilidade**, clicando no botão de alto-falante dentro da tela da chamada (afeta T043).
+- O rótulo real é **`Aceitar`**, não "Atender". Confirma a necessidade do RNF-06: rótulos em configuração, nunca fixos no código.
+- `fullScreenIntent=false` com a tela bloqueada contraria a suposição inicial. A tela cheia da chamada vem por outro mecanismo, então não se deve depender desse campo para detectar o estado bloqueado.
+
+Antes de aceitar o plano B como definitivo, duas tentativas de plano A ainda não exploradas valem um teste (ambas baratas):
+
+1. `PendingIntent.send()` com `ActivityOptions.setPendingIntentBackgroundActivityStartMode(MODE_BACKGROUND_ACTIVITY_START_ALLOWED)` (API 34), que concede explicitamente a isenção de *background activity launch*.
+2. `TelecomManager.acceptRingingCall()` com a permissão `ANSWER_PHONE_CALLS`, caso esta versão do WhatsApp registre as chamadas no Telecom.
+
 ## 8. Riscos
 
 | Risco | Prob. | Impacto | Mitigação |

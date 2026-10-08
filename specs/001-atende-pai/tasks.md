@@ -12,17 +12,22 @@
 
 App descartável, fora do repositório principal. Nenhum código daqui vai para produção.
 
-- [ ] T001 Criar app de spike com `NotificationListenerService` que registra no Logcat todos os campos da notificação de `com.whatsapp`
-- [ ] T002 Responder P-1: chamada chega como `CATEGORY_CALL` com ações, bloqueado e desbloqueado?
-- [ ] T003 Responder P-2: disparar o `PendingIntent` de "Atender" funciona no HyperOS?
-- [ ] T004 Responder P-3: existe notificação contínua com "Desligar"?
-- [ ] T005 [P] Responder P-4: viva-voz via `setCommunicationDevice` se mantém?
+- [x] T001 Criar app de spike com `NotificationListenerService` que registra no Logcat todos os campos da notificação de `com.whatsapp`
+- [~] T002 Responder P-1: chamada chega como `CATEGORY_CALL` com ações, bloqueado e desbloqueado? — **bloqueado medido (SIM); falta desbloqueado**
+- [x] T003 Responder P-2: disparar o `PendingIntent` de "Atender" funciona no HyperOS?
+- [x] T004 Responder P-3: existe notificação contínua com "Desligar"?
+- [x] T005 [P] Responder P-4: viva-voz via `setCommunicationDevice` se mantém?
 - [ ] T006 [P] Responder P-5: gesto de volume chega à acessibilidade com tela apagada?
 - [ ] T007 [P] Responder P-6: opção nativa do botão liga/desliga encerra chamada do WhatsApp?
 - [ ] T008 Salvar a notificação real como `fixtures/whatsapp_chamada.json`
 - [ ] T009 Registrar respostas na seção 7 do `plan.md` e atualizar a decisão C-5 da `spec.md`
 
 **Saída:** go / no-go e plano A ou B definido para cada ponto.
+
+> **Parcial em 2026-10-08.** Respostas medidas na seção 7.1 do `plan.md`.
+> Definido: atender vai por **acessibilidade** (P-2 falhou), desligar por
+> **`PendingIntent`** (P-3 passou), viva-voz por **acessibilidade** (P-4 falhou).
+> Faltam P-1b, P-5 e P-6 — e P-5/P-6 travam a decisão C-5 da `spec.md`.
 
 ## Fase 1 — Fundação (0,5 dia)
 
