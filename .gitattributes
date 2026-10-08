@@ -1,0 +1,10 @@
+# Normalização de texto por padrão
+* text=auto
+
+# Scripts de shell precisam de LF, senão quebram fora do Windows
+gradlew text eol=lf
+*.sh text eol=lf
+
+# Binários: nunca converter
+*.jar binary
+*.apk binary

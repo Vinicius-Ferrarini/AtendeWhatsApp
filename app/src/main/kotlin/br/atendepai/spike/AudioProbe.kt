@@ -1,0 +1,119 @@
+package br.atendepai.spike
+
+import android.content.Context
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+
+/**
+ * Responde P-4: `setCommunicationDevice(BUILTIN_SPEAKER)` mantem o viva-voz
+ * ou o WhatsApp devolve o audio ao alto-falante de ouvido?
+ *
+ * Reconsulta o estado varias vezes depois de forcar, porque a devolucao do audio
+ * costuma acontecer segundos depois.
+ */
+object AudioProbe {
+
+    private val RECONSULTAS_MS = listOf(2_000L, 5_000L, 10_000L, 20_000L)
+
+    fun forcarVivaVoz(ctx: Context) {
+        val am = ctx.getSystemService(AudioManager::class.java)
+        if (am == null) {
+            SpikeLog.d(ctx, "P-4: AudioManager indisponivel")
+            return
+        }
+        SpikeLog.d(ctx, "P-4 antes: ${estado(ctx)}")
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            @Suppress("DEPRECATION")
+            am.isSpeakerphoneOn = true
+            SpikeLog.d(ctx, "P-4: API < 31, usei isSpeakerphoneOn = true")
+        } else {
+            val alto = am.availableCommunicationDevices
+                .firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+            if (alto == null) {
+                val disponiveis = am.availableCommunicationDevices.joinToString { nomeTipo(it.type) }
+                SpikeLog.d(ctx, "P-4 FALHA: BUILTIN_SPEAKER fora de availableCommunicationDevices [$disponiveis]")
+                return
+            }
+            val ok = am.setCommunicationDevice(alto)
+            SpikeLog.d(ctx, "P-4 setCommunicationDevice(BUILTIN_SPEAKER) = $ok")
+            if (!ok) {
+                Veredito.registrar(
+                    ctx, "P-4", Veredito.Resultado.NAO,
+                    "setCommunicationDevice devolveu false → plano B: clicar no botão de alto-falante",
+                )
+                return
+            }
+            Veredito.registrar(
+                ctx, "P-4", Veredito.Resultado.PARCIAL,
+                "viva-voz forçado; aguardando as reconsultas de 2 a 20 s",
+            )
+        }
+
+        val handler = Handler(Looper.getMainLooper())
+        RECONSULTAS_MS.forEach { ms ->
+            handler.postDelayed({ reconsulta(ctx, ms) }, ms)
+        }
+    }
+
+    /**
+     * O WhatsApp costuma devolver o audio ao alto-falante de ouvido alguns segundos
+     * depois, por isso a resposta de P-4 so fecha na ultima reconsulta.
+     */
+    private fun reconsulta(ctx: Context, ms: Long) {
+        SpikeLog.d(ctx, "P-4 +${ms}ms: ${estado(ctx)}")
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        val am = ctx.getSystemService(AudioManager::class.java) ?: return
+        val tipo = am.communicationDevice?.type
+
+        if (tipo != AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+            Veredito.registrar(
+                ctx, "P-4", Veredito.Resultado.NAO,
+                "voltou para ${nomeTipo(tipo ?: -1)} depois de ${ms}ms " +
+                    "→ plano B: clicar no botão de alto-falante",
+            )
+            return
+        }
+        if (ms == RECONSULTAS_MS.last()) {
+            // preservarNao: se caiu numa reconsulta anterior, a queda e o que vale.
+            Veredito.registrar(
+                ctx, "P-4", Veredito.Resultado.SIM,
+                "continuou em BUILTIN_SPEAKER por ${ms}ms",
+                preservarNao = true,
+            )
+        }
+    }
+
+    fun estado(ctx: Context): String {
+        val am = ctx.getSystemService(AudioManager::class.java) ?: return "sem AudioManager"
+        val dispositivo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            am.communicationDevice?.let { "${nomeTipo(it.type)}(${it.type})" } ?: "null"
+        } else {
+            "n/d"
+        }
+        @Suppress("DEPRECATION")
+        val viva = am.isSpeakerphoneOn
+        return "mode=${nomeModo(am.mode)} communicationDevice=$dispositivo speakerphoneOn=$viva"
+    }
+
+    private fun nomeTipo(tipo: Int): String = when (tipo) {
+        AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "BUILTIN_SPEAKER"
+        AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "BUILTIN_EARPIECE"
+        AudioDeviceInfo.TYPE_WIRED_HEADSET -> "WIRED_HEADSET"
+        AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> "WIRED_HEADPHONES"
+        AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "BLUETOOTH_SCO"
+        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP -> "BLUETOOTH_A2DP"
+        else -> "TIPO_$tipo"
+    }
+
+    private fun nomeModo(modo: Int): String = when (modo) {
+        AudioManager.MODE_NORMAL -> "NORMAL"
+        AudioManager.MODE_RINGTONE -> "RINGTONE"
+        AudioManager.MODE_IN_CALL -> "IN_CALL"
+        AudioManager.MODE_IN_COMMUNICATION -> "IN_COMMUNICATION"
+        else -> "MODO_$modo"
+    }
+}
