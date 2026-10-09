@@ -1,6 +1,9 @@
 package br.atendepai.spike
 
 import android.accessibilityservice.AccessibilityService
+import android.app.KeyguardManager
+import android.content.Context
+import android.os.PowerManager
 import android.view.accessibility.AccessibilityNodeInfo
 
 /**
@@ -20,8 +23,12 @@ object ClicadorAcessibilidade {
     private const val MAX_TEXTOS_NO_RELATORIO = 30
 
     fun clicarPorTexto(servico: AccessibilityService, alvos: List<String>): String {
+        val contexto = estadoDaTela(servico)
         val janelas = runCatching { servico.windows }.getOrNull()
-        if (janelas.isNullOrEmpty()) return "nenhuma janela acessível"
+        if (janelas.isNullOrEmpty()) {
+            // O caso critico: com a tela bloqueada pode nao haver janela alcancavel.
+            return "SEM JANELA acessível [$contexto]"
+        }
 
         val vistos = mutableListOf<String>()
 
@@ -30,21 +37,30 @@ object ClicadorAcessibilidade {
             val achado = buscar(raiz, alvos, vistos, 0)
                 ?: continue
 
+            val visivel = achado.isVisibleToUser
             val clicavel = ancestralClicavel(achado)
-                ?: return "achou '${textoDe(achado)}' mas nada clicável na linhagem"
+                ?: return "achou '${textoDe(achado)}' mas nada clicável na linhagem [$contexto]"
 
             val ok = clicavel.performAction(AccessibilityNodeInfo.ACTION_CLICK)
             return if (ok) {
-                "CLICOU em '${textoDe(achado)}' (pacote=${raiz.packageName}, janela tipo=${janela.type})"
+                "CLICOU em '${textoDe(achado)}' (pacote=${raiz.packageName}, " +
+                    "janela=${janela.type}, visível=$visivel) [$contexto]"
             } else {
-                "ACTION_CLICK devolveu false em '${textoDe(achado)}'"
+                "ACTION_CLICK devolveu false em '${textoDe(achado)}' (visível=$visivel) [$contexto]"
             }
         }
 
         val inventario = vistos.filter { it.isNotBlank() }.distinct()
-        return "nenhum nó casou com $alvos. Textos visíveis: " +
+        return "nenhum nó casou com $alvos em ${janelas.size} janela(s) [$contexto]. Textos: " +
             inventario.take(MAX_TEXTOS_NO_RELATORIO).joinToString(" | ") +
             if (inventario.size > MAX_TEXTOS_NO_RELATORIO) " … (+${inventario.size - MAX_TEXTOS_NO_RELATORIO})" else ""
+    }
+
+    /** Sem isto nao da para distinguir "nao achou o botao" de "a tela estava apagada". */
+    fun estadoDaTela(ctx: Context): String {
+        val keyguard = ctx.getSystemService(KeyguardManager::class.java)
+        val power = ctx.getSystemService(PowerManager::class.java)
+        return "bloqueada=${keyguard?.isKeyguardLocked} telaLigada=${power?.isInteractive}"
     }
 
     /** Só inventaria o que está na tela, sem clicar. Útil para descobrir rótulos. */

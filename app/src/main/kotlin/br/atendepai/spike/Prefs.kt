@@ -7,9 +7,29 @@ object Prefs {
 
     const val ATRASO_PADRAO = 10
 
+    /** Sobe a cada versao que precisa descartar preferencia antiga. */
+    private const val VERSAO_ATUAL = 3
+
     private fun sp(ctx: Context) = ctx.getSharedPreferences("spike", Context.MODE_PRIVATE)
 
-    fun autoAtender(ctx: Context): Boolean = sp(ctx).getBoolean("auto_atender", false)
+    /**
+     * Na v0.2 o seletor de estrategia da tela parecia um botao de acao: quem
+     * apertasse os quatro acabava com a cascata fixada na ultima. A migracao
+     * devolve a cascata, que e o que responde tudo numa ligacao so.
+     */
+    fun migrarSeNecessario(ctx: Context) {
+        val p = sp(ctx)
+        if (p.getInt("versao", 0) >= VERSAO_ATUAL) return
+        p.edit()
+            .remove("estrategia")
+            .putBoolean("auto_atender", true)
+            .putInt("versao", VERSAO_ATUAL)
+            .apply()
+        SpikeLog.d(ctx, "prefs migradas para v$VERSAO_ATUAL: cascata + auto-atender LIGADO")
+    }
+
+    /** Ligado por padrao: atender sozinho e o proposito do app, nao um extra. */
+    fun autoAtender(ctx: Context): Boolean = sp(ctx).getBoolean("auto_atender", true)
 
     fun setAutoAtender(ctx: Context, ligado: Boolean) {
         sp(ctx).edit().putBoolean("auto_atender", ligado).apply()

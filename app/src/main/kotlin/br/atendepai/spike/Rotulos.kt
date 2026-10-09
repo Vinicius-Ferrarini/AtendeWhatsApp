@@ -8,13 +8,26 @@ import java.text.Normalizer
  */
 object Rotulos {
 
-    /** "Aceitar" vem primeiro: e o rotulo real observado no WhatsApp em 2026-10-08. */
-    val ATENDER = listOf("aceitar", "atender", "answer", "accept", "responder")
+    /**
+     * Rotulos reais, capturados pelo inventario de acessibilidade em 2026-10-09:
+     * a tela da chamada tocando mostra "Aceitar ligacao", "Recusar ligacao" e "Responder".
+     *
+     * "aceitar" vem primeiro e casa por substring com "Aceitar ligacao".
+     * Cuidado: "responder" responde por mensagem, nao atende — fica fora da lista.
+     */
+    val ATENDER = listOf("aceitar", "atender", "answer", "accept")
 
+    /** "recusar" casa com "Recusar ligacao" na tela tocando; "desligar" com a notificacao continua. */
     val DESLIGAR = listOf("desligar", "recusar", "encerrar", "decline", "reject", "hang up", "end call")
 
-    /** Botao de viva-voz dentro da tela da chamada, para o plano B de P-4. */
-    val ALTO_FALANTE = listOf("alto-falante", "alto falante", "viva-voz", "viva voz", "speaker")
+    /**
+     * Botao de viva-voz da tela de chamada **em andamento** — nao existe na tela
+     * tocando, onde a v0.2 o procurou por engano.
+     */
+    val ALTO_FALANTE = listOf(
+        "alto-falante", "alto falante", "viva-voz", "viva voz", "speaker",
+        "audio", "som", "loudspeaker",
+    )
 
     fun normaliza(texto: String): String =
         Normalizer.normalize(texto, Normalizer.Form.NFD)

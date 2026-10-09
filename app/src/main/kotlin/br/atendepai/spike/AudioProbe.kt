@@ -23,6 +23,17 @@ object AudioProbe {
 
     fun forcarVivaVoz(ctx: Context) {
         jaTentouAcessibilidade = false
+
+        // O botao de viva-voz so existe na tela de chamada EM ANDAMENTO. Na v0.2 a
+        // sonda rodou com a chamada ainda tocando e o inventario, naturalmente,
+        // nao achou nada — o aviso aqui evita repetir o engano.
+        if (!NotificationDumpService.chamadaEmAndamento) {
+            SpikeLog.d(
+                ctx,
+                "P-4 AVISO: nenhuma chamada em andamento. O botao de viva-voz nao existe " +
+                    "na tela de chamada tocando; o resultado nao vale.",
+            )
+        }
         val am = ctx.getSystemService(AudioManager::class.java)
         if (am == null) {
             SpikeLog.d(ctx, "P-4: AudioManager indisponivel")

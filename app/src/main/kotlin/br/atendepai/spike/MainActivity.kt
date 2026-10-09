@@ -14,69 +14,81 @@ import android.widget.ScrollView
 import android.widget.TextView
 
 /**
- * Unica interface do spike quando nao ha USB: mostra o veredito de cada pergunta,
- * escolhe a estrategia de atendimento e exporta tudo.
+ * Unica interface do spike quando nao ha USB.
  *
- * Serve ao administrador durante o experimento; o usuario final nunca a usa.
- * UI programatica de proposito: zero dependencias.
+ * Na v0.2 os botoes de selecao de estrategia pareciam acoes: quem apertava os
+ * quatro acabava com a cascata fixada na ultima, e tres estrategias nunca eram
+ * testadas. Por isso aqui **configuracao e acao ficam visualmente separadas** —
+ * acoes em MAIUSCULAS, configuracao com o prefixo "definir", e um painel no topo
+ * que mostra o estado efetivo antes de qualquer ligacao.
  */
 class MainActivity : Activity() {
 
-    private lateinit var permissoes: TextView
-    private lateinit var estrategiaAtual: TextView
+    private lateinit var painel: TextView
     private lateinit var respostas: TextView
     private lateinit var raiz: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Prefs.migrarSeNecessario(this)
 
         raiz = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(PADDING, PADDING, PADDING, PADDING)
         }
 
-        titulo("1. Permissões")
-        permissoes = corpo()
+        titulo("ESTADO — confira antes de ligar")
+        painel = corpo()
+
+        titulo("1. Permissões (uma vez)")
         botao("Conceder acesso a notificações") {
             abrir(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
         }
         botao("Ativar acessibilidade") {
             abrir(Settings.ACTION_ACCESSIBILITY_SETTINGS)
         }
-        botao("Permitir atender chamadas (P-2.3)") {
+        botao("Permitir atender chamadas") {
             requestPermissions(arrayOf(Manifest.permission.ANSWER_PHONE_CALLS), PEDIDO_ATENDER)
         }
 
-        titulo("2. Estratégia de atendimento")
-        estrategiaAtual = corpo()
-        botao("Cascata: tenta as 4 em ordem (recomendado)") {
+        titulo("2. Configurar o auto-atender")
+        nota("O auto-atender já vem LIGADO. É ele que atende sozinho, sem ninguém tocar na tela — é o que precisa funcionar.")
+        botao("definir: auto-atender LIGADO, 10 s") {
+            Prefs.setAutoAtender(this, true)
+            Prefs.setAtrasoSegundos(this, 10)
+        }
+        botao("definir: auto-atender LIGADO, 5 s") {
+            Prefs.setAutoAtender(this, true)
+            Prefs.setAtrasoSegundos(this, 5)
+        }
+        botao("definir: auto-atender DESLIGADO (só observar)") {
+            Prefs.setAutoAtender(this, false)
+        }
+
+        titulo("3. Configurar a estratégia")
+        nota("Estes botões NÃO atendem nada: só escolhem o que o auto-atender vai tentar. Deixe em cascata para testar as quatro de uma vez.")
+        botao("definir: CASCATA, tenta as 4 em ordem") {
             Prefs.setEstrategiaFixa(this, null)
         }
         Estrategia.entries.forEach { estrategia ->
-            botao("Só ${estrategia.id}: ${estrategia.rotulo.substringBefore(" (")}") {
+            botao("definir: só ${estrategia.id} — ${estrategia.rotulo.substringBefore(" (")}") {
                 Prefs.setEstrategiaFixa(this, estrategia)
             }
         }
 
-        titulo("3. Antes de ligar")
-        botao("Ligar auto-atender (${Prefs.ATRASO_PADRAO}s)") {
-            Prefs.setAutoAtender(this, true)
-            Prefs.setAtrasoSegundos(this, Prefs.ATRASO_PADRAO)
+        titulo("4. Ações manuais (durante a chamada)")
+        nota("Só para depurar. O teste que vale é o do auto-atender, com o celular bloqueado.")
+        botao("ATENDER AGORA") { NotificationDumpService.instancia?.atender(origem = "tela") }
+        botao("DESLIGAR AGORA") { NotificationDumpService.instancia?.desligar(origem = "tela") }
+        botao("FORÇAR VIVA-VOZ (só com chamada atendida)") {
+            AudioProbe.forcarVivaVoz(applicationContext)
         }
-        botao("Desligar auto-atender (só observar)") {
-            Prefs.setAutoAtender(this, false)
-        }
-
-        titulo("4. Durante a chamada")
-        botao("ATENDER agora") { NotificationDumpService.instancia?.atender(origem = "tela") }
-        botao("DESLIGAR agora") { NotificationDumpService.instancia?.desligar(origem = "tela") }
-        botao("Forçar viva-voz") { AudioProbe.forcarVivaVoz(applicationContext) }
-        botao("Inventariar textos da tela") {
+        botao("INVENTARIAR TEXTOS DA TELA") {
             respostas.text = NotificationDumpService.instancia?.inventariarTela() ?: "listener desativado"
         }
-        botao("Despejar notificações ativas") { NotificationDumpService.instancia?.dumpAtivas() }
+        botao("DESPEJAR NOTIFICAÇÕES ATIVAS") { NotificationDumpService.instancia?.dumpAtivas() }
 
-        titulo("5. Confirmar o que só você sabe")
+        titulo("5. Registrar o que só você sabe")
         botao("P-6: liga/desliga ENCERROU a chamada") {
             Veredito.registrar(this, "P-6", Veredito.Resultado.SIM, "opção nativa funcionou com o WhatsApp")
         }
@@ -89,16 +101,12 @@ class MainActivity : Activity() {
 
         titulo("6. Resultado")
         respostas = corpo()
-        botao("Salvar fixture (T008)") { NotificationDumpService.instancia?.salvaFixture() }
+        botao("SALVAR FIXTURE") { NotificationDumpService.instancia?.salvaFixture() }
         botao("EXPORTAR E ENVIAR") {
             val uris = LogExporter.exportar(this)
-            if (uris.isEmpty()) {
-                SpikeLog.d(this, "nada exportado ainda")
-            } else {
-                LogExporter.compartilhar(this, uris)
-            }
+            if (uris.isEmpty()) SpikeLog.d(this, "nada exportado ainda") else LogExporter.compartilhar(this, uris)
         }
-        botao("Apagar vereditos e começar de novo") { Veredito.limpar(this) }
+        botao("APAGAR VEREDITOS (antes de um teste novo)") { Veredito.limpar(this) }
 
         setContentView(ScrollView(this).apply { addView(raiz) })
     }
@@ -119,30 +127,25 @@ class MainActivity : Activity() {
     }
 
     private fun atualiza() {
-        permissoes.text = buildString {
-            appendLine("Acesso a notificações: ${marca(listenerAtivo())}")
-            appendLine("Listener conectado: ${marca(NotificationDumpService.instancia != null)}")
-            appendLine("Acessibilidade declarada: ${marca(acessibilidadeAtiva())}")
-            appendLine("Acessibilidade em execução: ${marca(SpikeAccessibilityService.instancia != null)}")
-            appendLine(
-                "ANSWER_PHONE_CALLS: " +
-                    marca(EstrategiasAtender.temPermissaoAtenderChamadas(this@MainActivity)),
-            )
-            appendLine()
-            appendLine(
-                "Auto-atender: ${Prefs.autoAtender(this@MainActivity)} " +
-                    "(${Prefs.atrasoSegundos(this@MainActivity)}s)",
-            )
-            append("Áudio: ${AudioProbe.estado(this@MainActivity)}")
-        }
-
         val fixa = Prefs.estrategiaFixa(this)
-        estrategiaAtual.text = buildString {
-            appendLine(if (fixa == null) "CASCATA: tenta as 4 em ordem" else "FIXA em ${fixa.id}")
-            Estrategia.entries.forEach { estrategia ->
-                val impedimento = EstrategiasAtender.impedimento(this@MainActivity, estrategia)
-                appendLine("  ${estrategia.id} ${impedimento ?: "pronta"}")
-            }
+        val pronto = listenerAtivo() &&
+            NotificationDumpService.instancia != null &&
+            SpikeAccessibilityService.instancia != null &&
+            Prefs.autoAtender(this)
+
+        painel.text = buildString {
+            appendLine(if (pronto) ">>> PRONTO PARA O TESTE <<<" else ">>> AINDA NAO ESTA PRONTO <<<")
+            appendLine()
+            appendLine("auto-atender ... ${if (Prefs.autoAtender(this@MainActivity)) "LIGADO" else "DESLIGADO"}, ${Prefs.atrasoSegundos(this@MainActivity)} s")
+            appendLine("estrategia ..... ${fixa?.id ?: "CASCATA (4 em ordem)"}")
+            appendLine()
+            appendLine("notificacoes ... ${marca(listenerAtivo())}")
+            appendLine("listener ativo . ${marca(NotificationDumpService.instancia != null)}")
+            appendLine("acessibilidade . ${marca(SpikeAccessibilityService.instancia != null)}")
+            appendLine("atender chamada  ${marca(EstrategiasAtender.temPermissaoAtenderChamadas(this@MainActivity))}")
+            appendLine()
+            appendLine("em chamada ..... ${NotificationDumpService.chamadaEmAndamento}")
+            append("audio .......... ${AudioProbe.estado(this@MainActivity)}")
         }
 
         respostas.text = Veredito.relatorio(this)
@@ -158,6 +161,17 @@ class MainActivity : Activity() {
                 setTypeface(Typeface.DEFAULT_BOLD)
                 setTextColor(Color.parseColor("#1A237E"))
                 setPadding(0, PADDING, 0, PADDING / 3)
+            },
+        )
+    }
+
+    private fun nota(texto: String) {
+        raiz.addView(
+            TextView(this).apply {
+                text = texto
+                textSize = 12f
+                setTextColor(Color.parseColor("#5D4037"))
+                setPadding(0, 0, 0, PADDING / 3)
             },
         )
     }
@@ -196,8 +210,6 @@ class MainActivity : Activity() {
     }
 
     private fun listenerAtivo(): Boolean = ativoEm("enabled_notification_listeners")
-
-    private fun acessibilidadeAtiva(): Boolean = ativoEm(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
 
     private fun ativoEm(chave: String): Boolean =
         Settings.Secure.getString(contentResolver, chave)?.contains(packageName) == true

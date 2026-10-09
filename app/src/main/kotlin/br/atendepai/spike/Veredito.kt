@@ -31,6 +31,8 @@ object Veredito {
         "P-4b" to "  - viva-voz por clique em acessibilidade (reserva)",
         "P-5" to "Gesto de volume chega à acessibilidade com a tela apagada",
         "P-6" to "Opção nativa do botão liga/desliga encerra chamada do WhatsApp",
+        "P-7" to "AUTO-ATENDER disparou sozinho, sem ninguém tocar na tela",
+        "P-8" to "Atendeu com o aparelho BLOQUEADO",
     )
 
     private val horario = SimpleDateFormat("dd/MM HH:mm:ss", Locale.US)

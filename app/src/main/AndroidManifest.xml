@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- P-2.3: TelecomManager.acceptRingingCall(). Permissao perigosa, pedida em runtime. -->
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+    <!-- Mantem a tela acordada durante a tentativa de atendimento, nunca entre chamadas. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
         android:allowBackup="false"

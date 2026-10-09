@@ -17,130 +17,144 @@ própria tela e exporta tudo pela folha de compartilhamento. O `adb` é opcional
 
 ---
 
-## v0.2 — o que mudou e por quê
+## v0.3 — o que a medicao de 09/10 ensinou
 
-A medição de 2026-10-08 (v0.1) deu um resultado decisivo:
+A v0.2 provou o essencial e expos duas falhas, uma delas de interface.
 
-| | |
+**Funcionou:** `P-2.4` — o clique por acessibilidade **atende**, confirmado pela chegada
+da notificação contínua. `P-3` — desligar segue funcionando por `PendingIntent`.
+`P-6` — o botão liga/desliga encerra chamada do WhatsApp, o que **decide a C-5**.
+
+**Não funcionou, e por quê:**
+
+| Sintoma | Causa real |
 | --- | --- |
-| **Desligar** | funciona por `PendingIntent` |
-| **Atender** | **não funciona** por `PendingIntent` — `send()` não lança exceção e não tem efeito |
+| `P-2.1`, `P-2.2`, `P-2.3` ficaram `NAO_TESTADO` | Os botões "Só P-2.x" da v0.2 pareciam ações, mas só *selecionavam* a estratégia. Apertar os quatro fixou a cascata na última, e as outras três nunca foram disparadas |
+| `P-4b` não achou o botão de viva-voz | Rodou com a chamada ainda **tocando**. O inventário provou: `Recusar ligação \| Aceitar ligação \| Responder`. O botão de alto-falante só existe na tela de chamada **em andamento** |
+| Auto-atender não disparou | `P-1a` ficou `NAO_TESTADO`, ou seja a avaliação da chamada tocando não rodou — e é no mesmo ponto que o auto-atender é agendado. Sem o arquivo de log não há como saber se foi configuração ou os vereditos apagados depois |
 
-Mesmo código, mesma notificação, resultados opostos. A hipótese: atender exige iniciar
-um serviço em primeiro plano com acesso ao **microfone**, e o Android 14 nega isso a um
-disparo programático em segundo plano. Desligar não precisa de microfone, então passa.
-Um toque humano carrega a isenção de *background activity launch*; `send()` não.
+### O que mudou
 
-A v0.2 ataca essa hipótese por **quatro ângulos**, em cascata:
-
-| ID | Estratégia | Aposta |
-| --- | --- | --- |
-| P-2.1 | `PendingIntent` simples | linha de base — já sabemos que falha; serve de controle |
-| P-2.2 | `PendingIntent` + `setPendingIntentBackgroundActivityStartMode(ALLOWED)` | concede explicitamente a isenção que falta (API 34) |
-| P-2.3 | `TelecomManager.acceptRingingCall()` | se o WhatsApp registra as chamadas no Telecom, é o caminho mais limpo |
-| P-2.4 | Clique no botão por acessibilidade | o clique sintético conta como interação do usuário |
-
-**O sucesso agora é detectado sozinho.** A notificação contínua do WhatsApp só existe
-depois da chamada atendida — isso foi comprovado em P-3. A cascata usa essa chegada como
-sinal objetivo: dispara uma estratégia, espera 2,5 s, e se a notificação contínua
-aparecer, aquela estratégia funcionou. **P-2 deixou de depender do seu ouvido.**
-
-Outras mudanças:
-
-- Desligar ganhou reserva por acessibilidade (**P-3b**), caso o `PendingIntent` pare de funcionar
-- Viva-voz ganhou reserva por acessibilidade (**P-4b**), já que P-4 falhou
-- Botão **Inventariar textos da tela**, que lista tudo que a acessibilidade vê — foi assim que se descobriu que o botão se chama `Aceitar`, não "Atender"
-- O rótulo `Aceitar` passou a ser o primeiro da lista de busca
-
-O gesto de volume (**P-5**) e o botão liga/desliga (**P-6**) continuam medidos, mas
-saíram do caminho principal: primeiro atender e desligar têm que funcionar.
+1. **Configuração e ação separadas na tela.** Ações em MAIÚSCULAS; configuração com o prefixo `definir:`. Um painel no topo mostra o estado efetivo e diz `PRONTO PARA O TESTE` ou não.
+2. **Auto-atender LIGADO por padrão**, e a migração de preferências **desfixa** a estratégia herdada da v0.2, devolvendo a cascata.
+3. **Retentativas no clique por acessibilidade** — 6 tentativas a cada 900 ms. Uma tentativa única falha se a tela da chamada demorar a aparecer, e não dá para distinguir isso de "o clique não funciona".
+4. **Wakelock durante a tentativa**, para o caso de a tela apagar no meio. Só durante a chamada, nunca entre chamadas (constituição IV).
+5. **Diagnóstico de tela bloqueada** em cada clique: `bloqueada=`, `telaLigada=`, número de janelas e se o nó estava visível. `SEM JANELA acessível` passou a ser uma resposta distinta de "não achei o botão".
+6. **Duas perguntas novas**, que são as que realmente importam:
+   - **P-7** — o auto-atender disparou sozinho, sem ninguém tocar na tela
+   - **P-8** — atendeu com o aparelho **bloqueado**
+7. **Rótulos corrigidos** com o que o inventário mostrou. `responder` saiu da lista de atender: responde por mensagem, não atende a ligação.
+8. O viva-voz agora **avisa** quando é acionado sem chamada em andamento.
 
 ---
 
 ## 1. Instalar
 
-Baixar `atende-spike.apk` desta branch pelo navegador do próprio celular, abrir, e
+Baixar `atende-spike.apk` desta branch pelo navegador do proprio celular, abrir, e
 permitir **fontes desconhecidas** para o app que abriu o arquivo. Se o MIUI / Play
 Protect reclamar, escolher "Instalar mesmo assim".
 
 Com cabo: `adb install -r atende-spike.apk`.
 
-> Instalando **sobre a v0.1**, os vereditos anteriores continuam gravados. Use
-> **Apagar vereditos e começar de novo** antes da primeira ligação, para não misturar
-> resultado velho com novo.
+> Instalando sobre a v0.2, a migracao de preferencias **desfixa** a estrategia e
+> **liga** o auto-atender. Os vereditos antigos continuam gravados: use
+> **APAGAR VEREDITOS** antes do teste novo.
 
-## 2. Conceder as três permissões
+## 2. Conceder as tres permissoes (secao 1 da tela)
 
-Pelos botões da seção 1 da tela:
+1. **Conceder acesso a notificacoes** -> marcar "Atende Spike"
+2. **Ativar acessibilidade** -> ativar "Atende Spike - acessibilidade". **Essencial**, nao opcional: e a unica estrategia comprovada
+3. **Permitir atender chamadas** -> conceder `ANSWER_PHONE_CALLS`
 
-1. **Conceder acesso a notificações** → marcar "Atende Spike"
-2. **Ativar acessibilidade** → ativar "Atende Spike — acessibilidade" *(agora é essencial, não opcional: P-2.4 e P-3b dependem dela)*
-3. **Permitir atender chamadas (P-2.3)** → conceder `ANSWER_PHONE_CALLS`
+Nas configuracoes do app no HyperOS: bateria **sem restricoes** e **inicializacao
+automatica**. Sem isso o sistema mata o servico e o resultado sai falso.
 
-A seção 1 deve mostrar `OK` em todas as linhas, inclusive **Acessibilidade em execução**.
-A seção 2 lista as quatro estratégias e diz se cada uma está `pronta` ou indisponível.
+## 3. Conferir o painel ESTADO
 
-Nas configurações do app no HyperOS: bateria **sem restrições** e **inicialização
-automática**. Sem isso o sistema mata o serviço e o resultado sai falso.
+O topo da tela precisa dizer **`>>> PRONTO PARA O TESTE <<<`**. Se disser o contrario,
+alguma linha abaixo esta `PENDENTE`. O painel tambem mostra o que vale de fato:
 
-## 3. Testar atender — uma ligação resolve
+```
+auto-atender ... LIGADO, 10 s
+estrategia ..... CASCATA (4 em ordem)
+```
 
-1. Seção 2: deixar em **Cascata** (padrão).
-2. Seção 3: **Ligar auto-atender (10s)**.
-3. Bloquear o celular, apagar a tela.
-4. Ligar por WhatsApp (voz) do segundo celular. **Não tocar na tela.**
-5. Deixar tocar até a cascata terminar — cerca de 20 s no total.
+> Os botoes da secao 3 comecam com `definir:` porque **nao atendem nada** — so
+> escolhem o que o auto-atender vai tentar. Foi essa confusao que invalidou tres
+> estrategias na v0.2.
 
-A cascata gasta até 10 s depois do atraso de 10 s, então a ligação precisa tocar
-~25 s. Se o chamador desistir antes, a cascata é cancelada e o log registra isso.
+## 4. O teste que vale: auto-atender com a tela bloqueada
 
-Abrir o app e ler a seção 6. O resultado útil é a linha do **P-2**: ela diz
-**qual estratégia atendeu**. As linhas `P-2.1` a `P-2.4` mostram o que cada uma fez.
+Nao toque na tela em nenhum momento. E isso que o app precisa fazer sozinho.
 
-> **Importante:** não atenda na mão durante o teste. Se você tocar em `Aceitar`, a
-> notificação contínua aparece e a cascata credita o sucesso à estratégia que estava
-> correndo naquele instante. O log tem o horário de cada disparo, mas é mais simples
-> não interferir.
+1. **APAGAR VEREDITOS** (secao 6).
+2. Conferir no painel: auto-atender `LIGADO`, estrategia `CASCATA`.
+3. Bloquear o celular e apagar a tela.
+4. Ligar por WhatsApp (voz) do segundo celular.
+5. **Deixar tocar ~25 s sem tocar em nada.**
 
-### Se nenhuma funcionar
+O atraso de 10 s e depois a cascata, que gasta no pior caso ~11 s: tres disparos
+unicos de 2 s e seis tentativas de clique a cada 900 ms.
 
-Aperte **Inventariar textos da tela** durante a chamada tocando e exporte. O inventário
-diz se a acessibilidade está mesmo vendo a tela da chamada e com que rótulos. Sem isso
-não há como saber se P-2.4 falhou por não achar o botão ou por o clique não ter efeito.
+Depois abrir o app e ler a secao 6. As linhas decisivas:
 
-## 4. Testar desligar
+| Veredito | O que significa |
+| --- | --- |
+| **P-7 = SIM** | o auto-atender disparou sozinho, sem toque na tela |
+| **P-8 = SIM** | atendeu com o aparelho **bloqueado** |
+| **P-2** | qual das quatro estrategias venceu |
+| `P-2.1` a `P-2.4` | o que cada uma fez, com diagnostico de tela e janelas |
 
-Com a chamada atendida, apertar **DESLIGAR agora**. Já funcionava na v0.1 por
-`PendingIntent` (**P-3**); a reserva por acessibilidade (**P-3b**) só é tentada se o
-`PendingIntent` falhar.
+Se quiser mais folga, use **definir: auto-atender LIGADO, 5 s**.
 
-Nessa mesma chamada, **P-4** e **P-4b** (viva-voz) se preenchem sozinhos.
+### Se falhar
 
-## 5. Opcional: gesto e botão
+Cada tentativa de clique registra `bloqueada=`, `telaLigada=`, quantas janelas havia e
+se o no estava visivel. Tres leituras possiveis:
+
+- **`SEM JANELA acessivel`** -> a acessibilidade nao alcanca a tela de chamada com o
+  aparelho bloqueado. E o pior caso, e muda o desenho da producao
+- **`nenhum no casou`** + lista de textos -> o botao existe com outro rotulo; o
+  inventario mostra qual
+- **`ACTION_CLICK devolveu false`** -> achou o botao e o clique nao foi aceito
+
+## 5. Testar desligar
+
+Com a chamada atendida, apertar **DESLIGAR AGORA**. Funciona por `PendingIntent`
+(**P-3**, comprovado); a reserva por acessibilidade (**P-3b**) so e tentada se ele falhar.
+
+Na mesma chamada **em andamento**, apertar **FORCAR VIVA-VOZ** para medir P-4 e P-4b.
+Nao aperte com a chamada ainda tocando: o botao de alto-falante nao existe nessa tela,
+e foi esse engano que invalidou o P-4b na v0.2. O app agora avisa no log.
+
+## 6. Opcional
 
 | Pergunta | O que fazer |
 | --- | --- |
 | **P-1b** | Ligar com o celular desbloqueado, em outro app |
 | **P-5** | Durante a chamada, tela apagada, longe do ouvido, segurar **volume para baixo** 2 s |
-| **P-6** | Ativar "Botão liga/desliga encerra chamada" em Acessibilidade, testar, e registrar no botão da seção 5 |
+| **P-6** | Ja respondido SIM. So repetir se quiser confirmar |
 
-## 6. Exportar
+## 7. Exportar
 
-Seção 6: **Salvar fixture (T008)**, depois **EXPORTAR E ENVIAR**. Grava em `Downloads`
-e abre a folha de compartilhamento:
+Secao 6: **SALVAR FIXTURE**, depois **EXPORTAR E ENVIAR**. Grava em `Downloads` e abre
+a folha de compartilhamento:
 
-| Arquivo | Conteúdo |
+| Arquivo | Conteudo |
 | --- | --- |
 | `atende-spike-RESPOSTAS-<data>.txt` | veredito de cada pergunta |
-| `atende-spike-log-<data>.txt` | log completo, com o JSON das notificações e o passo a passo da cascata |
+| `atende-spike-log-<data>.txt` | log completo, com o passo a passo da cascata |
 | `whatsapp_chamada-<data>.json` | a fixture de T008 |
 
-> **Privacidade:** a fixture contém o **nome e possivelmente o número** de quem ligou, e
-> o repositório é **público**. Trocar por um nome fictício antes de levar para a `main`.
+**Mande os dois primeiros.** Na v0.2 so o RESPOSTAS chegou, e sem o log nao foi possivel
+dizer por que o auto-atender nao disparou.
+
+> **Privacidade:** a fixture contem o **nome e possivelmente o numero** de quem ligou, e
+> o repositorio e **publico**. Trocar por um nome ficticio antes de levar para a `main`.
 
 ---
 
-## 7. Opcional: com USB
+## 8. Opcional: com USB
 
 ```bash
 adb logcat -s AtendeSpike
@@ -156,7 +170,7 @@ $S audiostate                               # só lê o estado do áudio
 $S savefixture                              # grava a fixture
 ```
 
-## 8. Compilar
+## 9. Compilar
 
 Precisa de **JDK 17** e **Android SDK** (platform 35 + build-tools). Android Studio é opcional.
 
@@ -166,13 +180,13 @@ Precisa de **JDK 17** e **Android SDK** (platform 35 + build-tools). Android Stu
 # saída: app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## 9. Limitações conhecidas
+## 10. Limitações conhecidas
 
 - `TelecomManager.acceptRingingCall()` está **deprecado** no API 35. Ainda funciona no Android 14, que é o alvo; se P-2.3 for a vencedora, a produção precisa checar a alternativa.
 - O lint aponta `StaticFieldLeak` nas instâncias estáticas dos serviços. Aceitável aqui: as referências são anuladas em `onDestroy` / `onListenerDisconnected`, e o app é descartável.
-- A v0.2 **compila e passa no lint, mas nunca foi executada**.
+- A v0.3 **compila e passa no lint, mas nunca foi executada**.
 
-## 10. Registro final
+## 11. Registro final
 
 Com as respostas em mão, preencher a seção 7.1 do `specs/001-atende-pai/plan.md` e a
 decisão **C-5** da `spec.md` (T009). **Registrar só o que foi observado.**

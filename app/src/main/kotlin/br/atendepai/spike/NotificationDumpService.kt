@@ -25,7 +25,13 @@ class NotificationDumpService : NotificationListenerService() {
 
     override fun onListenerConnected() {
         instancia = this
-        SpikeLog.d(this, "listener CONECTADO (auto=${Prefs.autoAtender(this)} atraso=${Prefs.atrasoSegundos(this)}s)")
+        Prefs.migrarSeNecessario(this)
+        val fixa = Prefs.estrategiaFixa(this)
+        SpikeLog.d(
+            this,
+            "listener CONECTADO (auto=${Prefs.autoAtender(this)} atraso=${Prefs.atrasoSegundos(this)}s " +
+                "estrategia=${fixa?.id ?: "CASCATA"})",
+        )
         dumpAtivas()
     }
 
@@ -66,8 +72,11 @@ class NotificationDumpService : NotificationListenerService() {
             return false
         }
         val fila = Prefs.filaDeEstrategias(this)
-        SpikeLog.d(this, "atender (origem=$origem) com ${fila.size} estrategia(s)")
-        CascataAtendimento.iniciar(this, sbn, fila)
+        SpikeLog.d(
+            this,
+            "atender (origem=$origem) com ${fila.size} estrategia(s): ${fila.joinToString { it.id }}",
+        )
+        CascataAtendimento.iniciar(this, sbn, fila, bloqueadaAoTocar, origem)
         return true
     }
 
@@ -197,6 +206,9 @@ class NotificationDumpService : NotificationListenerService() {
     /** P-1: categoria e acoes da chamada tocando, distinguindo bloqueado de desbloqueado. */
     private fun avaliaP1(sbn: StatusBarNotification) {
         val bloqueada = getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
+        // Guardado agora porque, quando a cascata rodar, a tela ja pode ter sido
+        // acesa pela propria chamada — e P-8 pergunta pelo estado no toque.
+        bloqueadaAoTocar = bloqueada
         val pergunta = if (bloqueada) "P-1a" else "P-1b"
         val acoes = sbn.notification.actions
         val atender = acoes?.firstOrNull {
@@ -250,7 +262,13 @@ class NotificationDumpService : NotificationListenerService() {
 
     private fun agendaAutoAtender() {
         if (!Prefs.autoAtender(this)) {
-            SpikeLog.d(this, "auto-atender DESLIGADO — apenas observando (P-1)")
+            SpikeLog.d(this, ">>> AUTO-ATENDER DESLIGADO — apenas observando. Ligue na tela (secao 3).")
+            Veredito.registrar(
+                this,
+                "P-7",
+                Veredito.Resultado.NAO_TESTADO,
+                "chamada chegou mas o auto-atender estava desligado",
+            )
             return
         }
         cancelaAutoAtender("reagendando")
@@ -262,7 +280,7 @@ class NotificationDumpService : NotificationListenerService() {
         }
         tarefaAutoAtender = tarefa
         handler.postDelayed(tarefa, atraso * 1_000L)
-        SpikeLog.d(this, "auto-atender agendado para ${atraso}s")
+        SpikeLog.d(this, ">>> AUTO-ATENDER agendado para ${atraso}s (bloqueadaAoTocar=$bloqueadaAoTocar)")
     }
 
     private fun cancelaAutoAtender(motivo: String) {
@@ -329,6 +347,10 @@ class NotificationDumpService : NotificationListenerService() {
         /** Lido pelo servico de acessibilidade para contextualizar P-5. */
         @Volatile
         var chamadaEmAndamento: Boolean = false
+
+        /** Estado do keyguard no instante em que a chamada comecou a tocar (P-8). */
+        @Volatile
+        var bloqueadaAoTocar: Boolean = false
 
         val PACOTES_WHATSAPP = setOf("com.whatsapp", "com.whatsapp.w4b")
     }
