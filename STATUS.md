@@ -6,8 +6,8 @@
 | --- | --- |
 | **Fase atual** | Fase 0 — spike de validação |
 | **Código de produção** | Nenhuma linha ainda (começa na Fase 1) |
-| **Bloqueio** | Faltam medir P-1b, P-5 e P-6; P-5 e P-6 travam a decisão C-5 |
-| **Próximo passo** | Rodar as 3 rodadas restantes e testar as duas tentativas finais de plano A para atender |
+| **Bloqueio** | Atender não funciona por `PendingIntent`; a v0.2 testa 4 alternativas |
+| **Próximo passo** | Instalar a v0.2 do spike e rodar uma ligação: a cascata descobre qual estratégia atende |
 
 ---
 
@@ -64,11 +64,26 @@ O app se auto-avalia e grava o veredito de cada pergunta no próprio aparelho, e
 | Pergunta | Como é respondida |
 | --- | --- |
 | P-1a / P-1b | Automático: categoria, ação de atender, `fullScreenIntent`, bloqueado vs. desbloqueado |
-| P-2 | O app marca `PARCIAL` quando o `PendingIntent` sai sem exceção; você confirma de ouvido num botão |
+| P-2 | Automático: a cascata tenta quatro estratégias e descobre qual atendeu |
 | P-3 | Automático, na notificação contínua da chamada em andamento |
 | P-4 | Automático; só vira `SIM` se o viva-voz resistir às reconsultas de 2, 5, 10 e 20 s |
 | P-5 | Automático quando a tecla de volume chega com a tela apagada |
 | P-6 | Você registra num botão — é configuração do sistema, não dá para detectar |
+
+### v0.2 — a cascata de atendimento
+
+Como atender foi o único ponto crítico que falhou, a v0.2 ataca-o por quatro ângulos numa única ligação:
+
+| ID | Estratégia | Aposta |
+| --- | --- | --- |
+| P-2.1 | `PendingIntent` simples | linha de base; já sabemos que falha, serve de controle |
+| P-2.2 | `PendingIntent` + `setPendingIntentBackgroundActivityStartMode(ALLOWED)` | concede a isenção que falta (API 34) |
+| P-2.3 | `TelecomManager.acceptRingingCall()` | se o WhatsApp usa Telecom, é o caminho mais limpo |
+| P-2.4 | Clique no botão por acessibilidade | o clique sintético conta como interação do usuário |
+
+**O sucesso passou a ser detectado sozinho.** A notificação contínua só existe depois da chamada atendida (comprovado em P-3), então a cascata dispara uma estratégia, espera 2,5 s e usa a chegada dessa notificação como sinal objetivo. P-2 não depende mais de confirmação de ouvido.
+
+Desligar ganhou reserva por acessibilidade (**P-3b**) e o viva-voz também (**P-4b**), já que P-4 falhou.
 
 O botão **EXPORTAR E ENVIAR** grava em `Downloads` e abre a folha de compartilhamento:
 
@@ -76,18 +91,20 @@ O botão **EXPORTAR E ENVIAR** grava em `Downloads` e abre a folha de compartilh
 - `atende-spike-log-<data>.txt` — log completo, com o JSON de cada notificação
 - `whatsapp_chamada-<data>.json` — a fixture de T008
 
-> **Executado com sucesso em 2026-10-08** no Redmi Note 13: o app subiu, o listener conectou e as sondas registraram veredito.
+> **A v0.1 rodou com sucesso em 2026-10-08** no Redmi Note 13: o app subiu, o listener conectou e as sondas registraram veredito. **A v0.2 compila e passa no lint, mas ainda não foi executada.**
 
 > **Privacidade:** a fixture contém o nome e possivelmente o número de quem ligou. Trocar por um nome fictício antes de versionar.
 
 ## Próximo passo
 
-1. Medir **P-1b** (chamada com o celular desbloqueado, em outro app) — rodada rápida.
-2. Medir **P-5** (volume com a tela apagada) e **P-6** (botão liga/desliga) — destravam C-5.
-3. Enviar o `atende-spike-log-*.txt` e o `whatsapp_chamada-*.json` para fechar **T008**.
-4. Testar as duas tentativas restantes de plano A para atender, antes de aceitar a acessibilidade como definitiva: `setPendingIntentBackgroundActivityStartMode` (API 34) e `TelecomManager.acceptRingingCall()`.
-5. Decidir **C-5** na `spec.md`: qual gesto encerra a ligação.
-6. Dar o **go / no-go** de cada ponto e fechar a Fase 0.
+A prioridade é **atender e desligar**. Gesto físico e timer ficam para depois.
+
+1. Instalar a **v0.2** da branch [`spike`](../../tree/spike) e conceder as **três** permissões — acessibilidade agora é essencial, não opcional.
+2. Apagar os vereditos da v0.1 para não misturar resultados.
+3. Uma ligação com a cascata ligada responde **P-2** inteiro: qual das quatro estratégias atende.
+4. Na mesma chamada, conferir **P-3** (desligar) e **P-4 / P-4b** (viva-voz).
+5. Enviar o `atende-spike-log-*.txt` e o `whatsapp_chamada-*.json` para fechar **T008**.
+6. Só então medir **P-1b**, **P-5** e **P-6**, decidir **C-5** e fechar a Fase 0.
 
 Só então começa a Fase 1 (fundação do projeto Gradle) e, com ela, o primeiro teste vermelho.
 
