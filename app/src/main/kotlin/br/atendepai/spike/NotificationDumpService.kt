@@ -52,12 +52,57 @@ class NotificationDumpService : NotificationListenerService() {
         ativas.filter(::interessa).forEach { trata("ATIVA", it) }
     }
 
-    /** P-2 / P-3: dispara o PendingIntent da acao. */
-    fun atender(origem: String): Boolean =
-        disparaAcao(Rotulos.ATENDER, "P-2 ATENDER", origem, sondarAudio = true)
+    /**
+     * P-2: roda a cascata de estrategias de atendimento.
+     *
+     * O PendingIntent simples sozinho ja se mostrou inutil no HyperOS, por isso
+     * aqui nao se dispara mais uma acao so: a [CascataAtendimento] tenta as
+     * quatro em ordem e detecta qual funcionou.
+     */
+    fun atender(origem: String): Boolean {
+        val sbn = ultimaChamada
+        if (sbn == null) {
+            SpikeLog.d(this, "atender ($origem): nenhuma chamada registrada")
+            return false
+        }
+        val fila = Prefs.filaDeEstrategias(this)
+        SpikeLog.d(this, "atender (origem=$origem) com ${fila.size} estrategia(s)")
+        CascataAtendimento.iniciar(this, sbn, fila)
+        return true
+    }
 
-    fun desligar(origem: String): Boolean =
-        disparaAcao(Rotulos.DESLIGAR, "P-3 DESLIGAR", origem, sondarAudio = false)
+    /**
+     * P-3: desligar continua no plano A, por PendingIntent — e o unico ponto
+     * comprovadamente funcional na medicao de 2026-10-08. Se falhar, cai para
+     * o clique por acessibilidade (P-3b).
+     */
+    fun desligar(origem: String): Boolean {
+        if (disparaAcao(Rotulos.DESLIGAR, "P-3 DESLIGAR", origem, sondarAudio = false)) return true
+
+        val servico = SpikeAccessibilityService.instancia
+        if (servico == null) {
+            SpikeLog.d(this, "P-3b: acessibilidade desativada, sem reserva para desligar")
+            return false
+        }
+        val diagnostico = ClicadorAcessibilidade.clicarPorTexto(servico, Rotulos.DESLIGAR)
+        SpikeLog.d(this, "P-3b desligar por acessibilidade: $diagnostico")
+        Veredito.registrar(
+            this,
+            "P-3b",
+            if (diagnostico.startsWith("CLICOU")) Veredito.Resultado.PARCIAL else Veredito.Resultado.NAO,
+            diagnostico,
+        )
+        return diagnostico.startsWith("CLICOU")
+    }
+
+    /** Lista os textos visiveis nas janelas. Serve para descobrir os rotulos reais. */
+    fun inventariarTela(): String {
+        val servico = SpikeAccessibilityService.instancia
+            ?: return "acessibilidade desativada"
+        val inventario = ClicadorAcessibilidade.inventariar(servico)
+        SpikeLog.d(this, "inventario da tela:\n$inventario")
+        return inventario
+    }
 
     fun salvaFixture(): File? {
         val json = ultimoJson
@@ -106,9 +151,17 @@ class NotificationDumpService : NotificationListenerService() {
             "POSTED", "ATIVA" -> {
                 if (sbn.isOngoing) {
                     // P-3: a notificacao continua e a da chamada em andamento.
+                    // Ela e tambem o sinal objetivo de que a chamada foi atendida,
+                    // que e como a cascata descobre qual estrategia funcionou.
+                    val novaChamada = !chamadaEmAndamento
                     SpikeLog.d(this, "P-3: notificacao CONTINUA da chamada em andamento detectada")
                     chamadaEmAndamento = true
                     avaliaP3(sbn)
+                    CascataAtendimento.aoDetectarAtendida()
+                    if (novaChamada) {
+                        // P-4 so faz sentido com a chamada ja atendida.
+                        handler.postDelayed({ AudioProbe.forcarVivaVoz(applicationContext) }, 1_500L)
+                    }
                 } else {
                     avaliaP1(sbn)
                 }
@@ -130,7 +183,12 @@ class NotificationDumpService : NotificationListenerService() {
 
             "REMOVED" -> {
                 SpikeLog.d(this, "chamada removida (motivo=$motivo)")
-                if (sbn.isOngoing) chamadaEmAndamento = false
+                if (sbn.isOngoing) {
+                    chamadaEmAndamento = false
+                } else {
+                    // A chamada parou de tocar: nao faz sentido seguir tentando atender.
+                    CascataAtendimento.cancelar(this, "a chamada parou de tocar")
+                }
                 cancelaAutoAtender("notificacao removida")
             }
         }
@@ -215,6 +273,12 @@ class NotificationDumpService : NotificationListenerService() {
         tarefaAutoAtender = null
     }
 
+    /**
+     * Dispara o PendingIntent de uma acao da notificacao.
+     *
+     * Hoje serve so ao desligar: atender passou para a [CascataAtendimento],
+     * porque o PendingIntent simples nao funciona no HyperOS.
+     */
     private fun disparaAcao(
         rotulos: List<String>,
         etiqueta: String,
@@ -246,34 +310,14 @@ class NotificationDumpService : NotificationListenerService() {
             pendente.send()
             SpikeLog.d(
                 this,
-                "$etiqueta: PendingIntent '${alvo.title}' disparado sem excecao (origem=$origem). " +
-                    "CONFIRMAR DE OUVIDO se a chamada realmente mudou de estado.",
+                "$etiqueta: PendingIntent '${alvo.title}' disparado sem excecao (origem=$origem)",
             )
             if (sondarAudio) {
-                // send() sem excecao nao prova que atendeu: so o ouvido fecha P-2.
-                Veredito.registrar(
-                    this,
-                    "P-2",
-                    Veredito.Resultado.PARCIAL,
-                    "PendingIntent '${alvo.title}' disparado sem exceção (origem=$origem). " +
-                        "Confirme na tela se a chamada foi atendida.",
-                )
-            }
-            if (sondarAudio) {
-                // P-4 so faz sentido com a chamada ja atendida.
                 handler.postDelayed({ AudioProbe.forcarVivaVoz(applicationContext) }, 1_500L)
             }
             true
         } catch (e: Exception) {
-            SpikeLog.d(this, "$etiqueta ERRO: ${e.javaClass.simpleName}: ${e.message} -> plano B por acessibilidade")
-            if (sondarAudio) {
-                Veredito.registrar(
-                    this,
-                    "P-2",
-                    Veredito.Resultado.NAO,
-                    "${e.javaClass.simpleName}: ${e.message} → plano B: clique por acessibilidade",
-                )
-            }
+            SpikeLog.d(this, "$etiqueta ERRO: ${e.javaClass.simpleName}: ${e.message}")
             false
         }
     }

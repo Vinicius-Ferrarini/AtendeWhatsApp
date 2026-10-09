@@ -1,5 +1,6 @@
 package br.atendepai.spike
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Color
@@ -14,7 +15,7 @@ import android.widget.TextView
 
 /**
  * Unica interface do spike quando nao ha USB: mostra o veredito de cada pergunta,
- * deixa confirmar o que so o ouvido decide (P-2 e P-6) e exporta tudo.
+ * escolhe a estrategia de atendimento e exporta tudo.
  *
  * Serve ao administrador durante o experimento; o usuario final nunca a usa.
  * UI programatica de proposito: zero dependencias.
@@ -22,6 +23,7 @@ import android.widget.TextView
 class MainActivity : Activity() {
 
     private lateinit var permissoes: TextView
+    private lateinit var estrategiaAtual: TextView
     private lateinit var respostas: TextView
     private lateinit var raiz: LinearLayout
 
@@ -38,11 +40,25 @@ class MainActivity : Activity() {
         botao("Conceder acesso a notificações") {
             abrir(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
         }
-        botao("Ativar acessibilidade (P-5)") {
+        botao("Ativar acessibilidade") {
             abrir(Settings.ACTION_ACCESSIBILITY_SETTINGS)
         }
+        botao("Permitir atender chamadas (P-2.3)") {
+            requestPermissions(arrayOf(Manifest.permission.ANSWER_PHONE_CALLS), PEDIDO_ATENDER)
+        }
 
-        titulo("2. Antes de ligar")
+        titulo("2. Estratégia de atendimento")
+        estrategiaAtual = corpo()
+        botao("Cascata: tenta as 4 em ordem (recomendado)") {
+            Prefs.setEstrategiaFixa(this, null)
+        }
+        Estrategia.entries.forEach { estrategia ->
+            botao("Só ${estrategia.id}: ${estrategia.rotulo.substringBefore(" (")}") {
+                Prefs.setEstrategiaFixa(this, estrategia)
+            }
+        }
+
+        titulo("3. Antes de ligar")
         botao("Ligar auto-atender (${Prefs.ATRASO_PADRAO}s)") {
             Prefs.setAutoAtender(this, true)
             Prefs.setAtrasoSegundos(this, Prefs.ATRASO_PADRAO)
@@ -51,22 +67,16 @@ class MainActivity : Activity() {
             Prefs.setAutoAtender(this, false)
         }
 
-        titulo("3. Durante a chamada")
-        botao("Atender agora (P-2)") { NotificationDumpService.instancia?.atender(origem = "tela") }
-        botao("Desligar agora (P-3)") { NotificationDumpService.instancia?.desligar(origem = "tela") }
-        botao("Forçar viva-voz (P-4)") { AudioProbe.forcarVivaVoz(applicationContext) }
+        titulo("4. Durante a chamada")
+        botao("ATENDER agora") { NotificationDumpService.instancia?.atender(origem = "tela") }
+        botao("DESLIGAR agora") { NotificationDumpService.instancia?.desligar(origem = "tela") }
+        botao("Forçar viva-voz") { AudioProbe.forcarVivaVoz(applicationContext) }
+        botao("Inventariar textos da tela") {
+            respostas.text = NotificationDumpService.instancia?.inventariarTela() ?: "listener desativado"
+        }
         botao("Despejar notificações ativas") { NotificationDumpService.instancia?.dumpAtivas() }
 
-        titulo("4. Confirmar o que só você sabe")
-        botao("P-2: a chamada FOI atendida") {
-            Veredito.registrar(this, "P-2", Veredito.Resultado.SIM, "confirmado de ouvido pelo administrador")
-        }
-        botao("P-2: NÃO foi atendida") {
-            Veredito.registrar(
-                this, "P-2", Veredito.Resultado.NAO,
-                "disparo sem efeito, confirmado de ouvido → plano B: clique por acessibilidade",
-            )
-        }
+        titulo("5. Confirmar o que só você sabe")
         botao("P-6: liga/desliga ENCERROU a chamada") {
             Veredito.registrar(this, "P-6", Veredito.Resultado.SIM, "opção nativa funcionou com o WhatsApp")
         }
@@ -77,7 +87,7 @@ class MainActivity : Activity() {
             )
         }
 
-        titulo("5. Resultado")
+        titulo("6. Resultado")
         respostas = corpo()
         botao("Salvar fixture (T008)") { NotificationDumpService.instancia?.salvaFixture() }
         botao("EXPORTAR E ENVIAR") {
@@ -98,15 +108,43 @@ class MainActivity : Activity() {
         atualiza()
     }
 
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        SpikeLog.d(this, "ANSWER_PHONE_CALLS concedida=${EstrategiasAtender.temPermissaoAtenderChamadas(this)}")
+        atualiza()
+    }
+
     private fun atualiza() {
         permissoes.text = buildString {
             appendLine("Acesso a notificações: ${marca(listenerAtivo())}")
             appendLine("Listener conectado: ${marca(NotificationDumpService.instancia != null)}")
-            appendLine("Acessibilidade: ${marca(acessibilidadeAtiva())}")
+            appendLine("Acessibilidade declarada: ${marca(acessibilidadeAtiva())}")
+            appendLine("Acessibilidade em execução: ${marca(SpikeAccessibilityService.instancia != null)}")
+            appendLine(
+                "ANSWER_PHONE_CALLS: " +
+                    marca(EstrategiasAtender.temPermissaoAtenderChamadas(this@MainActivity)),
+            )
             appendLine()
-            appendLine("Auto-atender: ${Prefs.autoAtender(this@MainActivity)} (${Prefs.atrasoSegundos(this@MainActivity)}s)")
+            appendLine(
+                "Auto-atender: ${Prefs.autoAtender(this@MainActivity)} " +
+                    "(${Prefs.atrasoSegundos(this@MainActivity)}s)",
+            )
             append("Áudio: ${AudioProbe.estado(this@MainActivity)}")
         }
+
+        val fixa = Prefs.estrategiaFixa(this)
+        estrategiaAtual.text = buildString {
+            appendLine(if (fixa == null) "CASCATA: tenta as 4 em ordem" else "FIXA em ${fixa.id}")
+            Estrategia.entries.forEach { estrategia ->
+                val impedimento = EstrategiasAtender.impedimento(this@MainActivity, estrategia)
+                appendLine("  ${estrategia.id} ${impedimento ?: "pronta"}")
+            }
+        }
+
         respostas.text = Veredito.relatorio(this)
     }
 
@@ -141,7 +179,10 @@ class MainActivity : Activity() {
                 )
                 setOnClickListener {
                     runCatching(acao).onFailure {
-                        SpikeLog.d(this@MainActivity, "erro em '$texto': ${it.javaClass.simpleName}: ${it.message}")
+                        SpikeLog.d(
+                            this@MainActivity,
+                            "erro em '$texto': ${it.javaClass.simpleName}: ${it.message}",
+                        )
                     }
                     atualiza()
                 }
@@ -163,5 +204,6 @@ class MainActivity : Activity() {
 
     private companion object {
         const val PADDING = 40
+        const val PEDIDO_ATENDER = 1
     }
 }

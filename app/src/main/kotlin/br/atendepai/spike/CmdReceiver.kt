@@ -61,10 +61,11 @@ class CmdReceiver : BroadcastReceiver() {
             "answer" -> listener.atender(origem = "adb")
             "hangup" -> listener.desligar(origem = "adb")
             "savefixture" -> listener.salvaFixture()
+            "inventory" -> listener.inventariarTela()
         }
     }
 
     private companion object {
-        val COMANDOS_DO_LISTENER = setOf("dump", "answer", "hangup", "savefixture")
+        val COMANDOS_DO_LISTENER = setOf("dump", "answer", "hangup", "savefixture", "inventory")
     }
 }

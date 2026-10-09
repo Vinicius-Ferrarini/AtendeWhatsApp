@@ -3,6 +3,8 @@
 
     <!-- Sem INTERNET (constituicao VI). Viva-voz exige MODIFY_AUDIO_SETTINGS (permissao normal). -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- P-2.3: TelecomManager.acceptRingingCall(). Permissao perigosa, pedida em runtime. -->
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
 
     <application
         android:allowBackup="false"

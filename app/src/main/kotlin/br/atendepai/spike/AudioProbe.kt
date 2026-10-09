@@ -18,7 +18,11 @@ object AudioProbe {
 
     private val RECONSULTAS_MS = listOf(2_000L, 5_000L, 10_000L, 20_000L)
 
+    /** Evita clicar no botao de viva-voz uma vez por reconsulta, o que o alternaria. */
+    private var jaTentouAcessibilidade = false
+
     fun forcarVivaVoz(ctx: Context) {
+        jaTentouAcessibilidade = false
         val am = ctx.getSystemService(AudioManager::class.java)
         if (am == null) {
             SpikeLog.d(ctx, "P-4: AudioManager indisponivel")
@@ -75,6 +79,7 @@ object AudioProbe {
                 "voltou para ${nomeTipo(tipo ?: -1)} depois de ${ms}ms " +
                     "→ plano B: clicar no botão de alto-falante",
             )
+            tentarPorAcessibilidade(ctx)
             return
         }
         if (ms == RECONSULTAS_MS.last()) {
@@ -85,6 +90,34 @@ object AudioProbe {
                 preservarNao = true,
             )
         }
+    }
+
+    /**
+     * P-4b: reserva para quando o WhatsApp devolve o audio ao ouvido.
+     *
+     * Clica no botao de viva-voz dentro da tela da chamada. Só e tentada uma vez
+     * por chamada, para nao ficar alternando o alto-falante a cada reconsulta.
+     */
+    private fun tentarPorAcessibilidade(ctx: Context) {
+        if (jaTentouAcessibilidade) return
+        jaTentouAcessibilidade = true
+
+        val servico = SpikeAccessibilityService.instancia
+        if (servico == null) {
+            Veredito.registrar(
+                ctx, "P-4b", Veredito.Resultado.NAO_TESTADO,
+                "acessibilidade desativada",
+            )
+            return
+        }
+        val diagnostico = ClicadorAcessibilidade.clicarPorTexto(servico, Rotulos.ALTO_FALANTE)
+        SpikeLog.d(ctx, "P-4b viva-voz por acessibilidade: $diagnostico")
+        Veredito.registrar(
+            ctx,
+            "P-4b",
+            if (diagnostico.startsWith("CLICOU")) Veredito.Resultado.PARCIAL else Veredito.Resultado.NAO,
+            diagnostico,
+        )
     }
 
     fun estado(ctx: Context): String {

@@ -20,11 +20,18 @@ class SpikeAccessibilityService : AccessibilityService() {
     private var pressionadoEm = 0L
 
     override fun onServiceConnected() {
-        SpikeLog.d(this, "acessibilidade CONECTADA (filtro de teclas ativo)")
+        instancia = this
+        SpikeLog.d(this, "acessibilidade CONECTADA (filtro de teclas e leitura de janelas ativos)")
     }
 
     override fun onInterrupt() {
         SpikeLog.d(this, "acessibilidade INTERROMPIDA")
+    }
+
+    override fun onDestroy() {
+        instancia = null
+        SpikeLog.d(this, "acessibilidade DESTRUIDA")
+        super.onDestroy()
     }
 
     override fun onKeyEvent(evento: KeyEvent): Boolean {
@@ -81,8 +88,12 @@ class SpikeAccessibilityService : AccessibilityService() {
         else -> "TECLA_$codigo"
     }
 
-    private companion object {
-        val TECLAS_DE_INTERESSE = setOf(
+    companion object {
+        /** Necessaria para o ClicadorAcessibilidade alcancar as janelas da chamada. */
+        @Volatile
+        var instancia: SpikeAccessibilityService? = null
+
+        private val TECLAS_DE_INTERESSE = setOf(
             KeyEvent.KEYCODE_VOLUME_DOWN,
             KeyEvent.KEYCODE_VOLUME_UP,
             KeyEvent.KEYCODE_POWER,

@@ -20,4 +20,25 @@ object Prefs {
     fun setAtrasoSegundos(ctx: Context, segundos: Int) {
         sp(ctx).edit().putInt("atraso", segundos).apply()
     }
+
+    /**
+     * Estrategia unica a testar, ou `null` para rodar a cascata inteira.
+     *
+     * A cascata e o padrao: responde tudo numa ligacao so. Fixar uma estrategia
+     * serve para repetir um resultado duvidoso sem interferencia das outras.
+     */
+    fun estrategiaFixa(ctx: Context): Estrategia? {
+        val nome = sp(ctx).getString("estrategia", null) ?: return null
+        return runCatching { Estrategia.valueOf(nome) }.getOrNull()
+    }
+
+    fun setEstrategiaFixa(ctx: Context, estrategia: Estrategia?) {
+        val editor = sp(ctx).edit()
+        if (estrategia == null) editor.remove("estrategia") else editor.putString("estrategia", estrategia.name)
+        editor.apply()
+    }
+
+    /** A fila que a cascata vai percorrer nesta ligacao. */
+    fun filaDeEstrategias(ctx: Context): List<Estrategia> =
+        estrategiaFixa(ctx)?.let { listOf(it) } ?: Estrategia.entries.toList()
 }

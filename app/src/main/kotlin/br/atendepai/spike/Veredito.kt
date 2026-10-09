@@ -20,9 +20,15 @@ object Veredito {
     val PERGUNTAS: List<Pair<String, String>> = listOf(
         "P-1a" to "Bloqueado: chamada chega como CATEGORY_CALL com ação de atender",
         "P-1b" to "Desbloqueado: idem",
-        "P-2" to "Disparar o PendingIntent de Atender funciona no HyperOS",
-        "P-3" to "Existe notificação contínua com ação de Desligar",
+        "P-2" to "ATENDER funciona por alguma estratégia",
+        "P-2.1" to "  - PendingIntent simples (linha de base)",
+        "P-2.2" to "  - PendingIntent + background activity start (API 34)",
+        "P-2.3" to "  - TelecomManager.acceptRingingCall()",
+        "P-2.4" to "  - clique no botão por acessibilidade",
+        "P-3" to "DESLIGAR pelo PendingIntent da notificação contínua",
+        "P-3b" to "  - desligar por acessibilidade (reserva)",
         "P-4" to "setCommunicationDevice mantém o viva-voz",
+        "P-4b" to "  - viva-voz por clique em acessibilidade (reserva)",
         "P-5" to "Gesto de volume chega à acessibilidade com a tela apagada",
         "P-6" to "Opção nativa do botão liga/desliga encerra chamada do WhatsApp",
     )
